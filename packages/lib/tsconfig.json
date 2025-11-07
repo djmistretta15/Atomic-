@@ -1,0 +1,12 @@
+{
+  "extends": "@atomic/config/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "target": "ES2020"
+  },
+  "include": ["."],
+  "exclude": ["dist", "node_modules"]
+}

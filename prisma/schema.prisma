@@ -1,0 +1,311 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  CUSTOMER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  role          Role      @default(CUSTOMER)
+  image         String?
+  emailVerified DateTime?
+  orders        Order[]
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Collection {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String?   @db.Text
+  blurb       String?   @db.Text
+  heroImage   String?
+  published   Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("collections")
+}
+
+model Product {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  title         String
+  sku           String         @unique
+  description   String         @db.Text
+  fieldNote     String?        @db.Text
+  priceCents    Int
+  currency      String         @default("USD")
+  variants      Variant[]
+  images        ProductImage[]
+  specimenId    String?
+  specimen      Specimen?      @relation(fields: [specimenId], references: [id])
+  collectionId  String?
+  collection    Collection?    @relation(fields: [collectionId], references: [id])
+  impactRouteId String?
+  impactRoute   ImpactRoute?   @relation(fields: [impactRouteId], references: [id])
+  dropId        String?
+  drop          Drop?          @relation(fields: [dropId], references: [id])
+  published     Boolean        @default(false)
+  featured      Boolean        @default(false)
+  tags          String[]
+  seoTitle      String?
+  seoDescription String?       @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([collectionId])
+  @@index([specimenId])
+  @@index([dropId])
+  @@index([published])
+  @@map("products")
+}
+
+model Variant {
+  id                String   @id @default(cuid())
+  productId         String
+  size              String
+  color             String
+  material          String
+  stockQty          Int      @default(0)
+  printProviderSku  String?
+  printProviderType String?  // printful, printify, local
+  weightGrams       Int?
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([productId, size, color, material])
+  @@index([productId])
+  @@map("variants")
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+  width     Int?
+  height    Int?
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model Specimen {
+  id            String        @id @default(cuid())
+  code          String        @unique // e.g., SPEC-LI-HEMATITE-001
+  title         String
+  category      String // Microscope/Geology/BioPatterns/Marine/Astral
+  taxonomy      Json? // {class, order, family, genus, species}
+  technique     String? // SEM, Polarized, Macro, etc.
+  magnification String? // e.g. "1000x", "500x"
+  sourceNote    String?       @db.Text
+  location      String? // e.g., Long Island beach
+  captureDate   DateTime?
+  contributorId String?
+  contributor   Contributor?  @relation(fields: [contributorId], references: [id])
+  assetUrl      String
+  thumbnailUrl  String?
+  meta          Json? // additional metadata
+  products      Product[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([category])
+  @@index([contributorId])
+  @@map("specimens")
+}
+
+model Contributor {
+  id          String     @id @default(cuid())
+  name        String
+  email       String?    @unique
+  role        String? // Photographer, Lab, Fisher/Oyster Farm, etc.
+  bio         String?    @db.Text
+  website     String?
+  socials     Json? // {instagram: "@handle", twitter: "@handle"}
+  revShareBps Int? // optional basis points for revenue share
+  verified    Boolean    @default(false)
+  submissions Specimen[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("contributors")
+}
+
+model ImpactRoute {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String // e.g. "North Babylon School Labs"
+  type        String // Education, Restoration, Youth Program
+  description String?   @db.Text
+  splitBps    Int // default split for eligible products (e.g. 1500 = 15%)
+  wallet      String? // optional payout wallet or bank ref
+  publicUrl   String?
+  location    String? // e.g. "Long Island, NY"
+  active      Boolean   @default(true)
+  notes       String?   @db.Text
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("impact_routes")
+}
+
+model Drop {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String?   @db.Text
+  startAt     DateTime
+  endAt       DateTime?
+  limited     Boolean   @default(false)
+  editionSize Int?
+  published   Boolean   @default(false)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("drops")
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  orderNumber   String   @unique
+  userId        String?
+  email         String
+  items         Json // denormalized snapshot of items
+  subtotalCents Int
+  shippingCents Int
+  taxCents      Int
+  discountCents Int      @default(0)
+  totalCents    Int
+  currency      String   @default("USD")
+  stripeId      String?  @unique
+  status        String   @default("pending") // pending, paid, fulfilled, cancelled, refunded
+  shippingAddress Json?
+  billingAddress  Json?
+  fulfillmentStatus String? // unfulfilled, partial, fulfilled
+  trackingNumber    String?
+  trackingUrl       String?
+  user              User?   @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model DiscountCode {
+  id               String    @id @default(cuid())
+  code             String    @unique
+  type             String // percentage, fixed_amount
+  value            Int // percentage (e.g., 25 = 25%) or cents
+  minPurchaseCents Int?
+  maxUses          Int?
+  usedCount        Int       @default(0)
+  active           Boolean   @default(true)
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("discount_codes")
+}
+
+model ImpactLedger {
+  id              String   @id @default(cuid())
+  orderId         String
+  impactRouteId   String
+  impactRouteName String
+  amountCents     Int
+  currency        String   @default("USD")
+  status          String   @default("pending") // pending, allocated, paid
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([impactRouteId])
+  @@index([status])
+  @@map("impact_ledger")
+}
+
+model SearchIndex {
+  id        String   @id @default(cuid())
+  objectId  String   @unique
+  objectType String  // product, collection, specimen
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([objectType])
+  @@map("search_index")
+}
